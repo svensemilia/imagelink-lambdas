@@ -31,9 +31,13 @@ func init() {
 	}
 }
 
-//ctx context.Context, name MyEvent
-func HandleRequest() (*ec2.InstanceState, error) {
+type StatusResult struct {
+	State *ec2.InstanceState `json:"state"`
+	IP    *string            `json:"ip"`
+}
 
+func HandleRequest() (StatusResult, error) {
+	output := StatusResult{}
 	result, err := svc.DescribeInstances(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
@@ -44,12 +48,14 @@ func HandleRequest() (*ec2.InstanceState, error) {
 		} else {
 			fmt.Println(err.Error())
 		}
-		return nil, err
+		return output, err
 	}
 	if len(result.Reservations) == 0 || len(result.Reservations[0].Instances) == 0 {
-		return nil, fmt.Errorf("No instances found for your request - please contact the administrator")
+		return output, fmt.Errorf("No instances found for your request - please contact the administrator")
 	}
-	return result.Reservations[0].Instances[0].State, nil
+	output.IP = result.Reservations[0].Instances[0].PublicIpAddress
+	output.State = result.Reservations[0].Instances[0].State
+	return output, nil
 }
 
 func main() {
