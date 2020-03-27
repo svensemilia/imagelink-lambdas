@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -16,10 +15,6 @@ var (
 	svc   *ec2.EC2
 	input *ec2.DescribeInstancesInput
 )
-
-type MyEvent struct {
-	Name string `json:"name"`
-}
 
 func init() {
 	sess, _ := session.NewSession(&aws.Config{
@@ -36,7 +31,8 @@ func init() {
 	}
 }
 
-func HandleRequest(ctx context.Context, name MyEvent) (string, error) {
+//ctx context.Context, name MyEvent
+func HandleRequest() (*ec2.InstanceState, error) {
 
 	result, err := svc.DescribeInstances(input)
 	if err != nil {
@@ -48,11 +44,12 @@ func HandleRequest(ctx context.Context, name MyEvent) (string, error) {
 		} else {
 			fmt.Println(err.Error())
 		}
-		return fmt.Sprintf("Hello %s!", name.Name), nil
+		return nil, err
 	}
-	fmt.Println(result.Reservations[0].Instances[0].State)
-
-	return fmt.Sprintf("Hello %s!", name.Name), nil
+	if len(result.Reservations) == 0 || len(result.Reservations[0].Instances) == 0 {
+		return nil, fmt.Errorf("No instances found for your request - please contact the administrator")
+	}
+	return result.Reservations[0].Instances[0].State, nil
 }
 
 func main() {
