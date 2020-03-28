@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -12,8 +13,10 @@ import (
 )
 
 var (
-	svc   *ec2.EC2
-	input *ec2.DescribeInstancesInput
+	svc      *ec2.EC2
+	input    *ec2.DescribeInstancesInput
+	response *StatusResponse
+	state    State
 )
 
 func init() {
@@ -29,15 +32,25 @@ func init() {
 			aws.String(instanceId),
 		},
 	}
+
+	response = &StatusResponse{Code: 200, Headers: map[string]string{"hello": "world"}}
+	state = State{}
 }
 
-type StatusResult struct {
+type StatusResponse struct {
+	Code    int               `json:"statusCode"`
+	Headers map[string]string `json:"headers"`
+	Body    string            `json:"body"`
+	Base64  bool              `json:"isBase64Encoded"`
+}
+
+type State struct {
 	State *ec2.InstanceState `json:"state"`
-	IP    *string            `json:"ip"`
+	IP    *string            `json:"ip,omitempty"`
+	Error error              `json:"error,omitempty"`
 }
 
-func HandleRequest() (StatusResult, error) {
-	output := StatusResult{}
+func HandleRequest() (StatusResponse, error) {
 	result, err := svc.DescribeInstances(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
@@ -48,14 +61,23 @@ func HandleRequest() (StatusResult, error) {
 		} else {
 			fmt.Println(err.Error())
 		}
-		return output, err
+		response.Code = 500
+		state.Error = err
+		return stringifyJson(response, state), err
 	}
 	if len(result.Reservations) == 0 || len(result.Reservations[0].Instances) == 0 {
-		return output, fmt.Errorf("No instances found for your request - please contact the administrator")
+		response.Code = 404
+		return stringifyJson(response, state), fmt.Errorf("No instances found for your request - please contact the administrator")
 	}
-	output.IP = result.Reservations[0].Instances[0].PublicIpAddress
-	output.State = result.Reservations[0].Instances[0].State
-	return output, nil
+	state.IP = result.Reservations[0].Instances[0].PublicIpAddress
+	state.State = result.Reservations[0].Instances[0].State
+	return stringifyJson(response, state), nil
+}
+
+func stringifyJson(response *StatusResponse, state State) StatusResponse {
+	b, _ := json.Marshal(state)
+	response.Body = string(b)
+	return *response
 }
 
 func main() {

@@ -9,17 +9,19 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/svensemilia/util"
 )
 
-const(
+const (
 	actionStart = "start"
-	actionStop = "stop" 
+	actionStop  = "stop"
 )
 
 var (
-	svc   *ec2.EC2
+	svc        *ec2.EC2
 	inputStart *ec2.StartInstancesInput
-	inputStop *ec2.StopInstancesInput
+	inputStop  *ec2.StopInstancesInput
+	response   *util.LambdaApiResponse
 )
 
 func init() {
@@ -40,6 +42,8 @@ func init() {
 			aws.String(instanceId),
 		},
 	}
+
+	response = &util.LambdaApiResponse{Code: 200, Headers: map[string]string{"hello": "world"}}
 }
 
 type InstanceAction struct {
