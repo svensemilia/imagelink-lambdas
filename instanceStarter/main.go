@@ -22,6 +22,7 @@ var (
 	inputStart *ec2.StartInstancesInput
 	inputStop  *ec2.StopInstancesInput
 	response   *util.LambdaApiResponse
+	state      *State
 )
 
 func init() {
@@ -44,13 +45,19 @@ func init() {
 	}
 
 	response = &util.LambdaApiResponse{Code: 200, Headers: map[string]string{"hello": "world"}}
+	state = &State{}
 }
 
 type InstanceAction struct {
 	Action string `json:"action"`
 }
 
-func HandleRequest(action InstanceAction) error {
+type State struct {
+	Action string `json:"action,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+func HandleRequest(action InstanceAction) (util.LambdaApiResponse, error) {
 	var err error
 	if action.Action == actionStart {
 		fmt.Println("Starting instance...")
@@ -60,8 +67,14 @@ func HandleRequest(action InstanceAction) error {
 		fmt.Println("Stopping instance...")
 	} else {
 		fmt.Println("Action type not recognized:", action.Action)
+		err = fmt.Errorf("Action type not recognized: %s", action.Action)
 	}
-	return err
+	if err != nil {
+		response.Code = 500
+		state.Error = err.Error()
+	}
+	state.Action = action.Action
+	return util.StringifyBody(response, *state), nil
 }
 
 func startInstance() error {

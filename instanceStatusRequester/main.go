@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -10,12 +9,13 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/svensemilia/util"
 )
 
 var (
 	svc      *ec2.EC2
 	input    *ec2.DescribeInstancesInput
-	response *StatusResponse
+	response *util.LambdaApiResponse
 	state    State
 )
 
@@ -33,24 +33,17 @@ func init() {
 		},
 	}
 
-	response = &StatusResponse{Code: 200, Headers: map[string]string{"hello": "world"}}
+	response = &util.LambdaApiResponse{Code: 200, Headers: map[string]string{"hello": "world"}}
 	state = State{}
-}
-
-type StatusResponse struct {
-	Code    int               `json:"statusCode"`
-	Headers map[string]string `json:"headers"`
-	Body    string            `json:"body"`
-	Base64  bool              `json:"isBase64Encoded"`
 }
 
 type State struct {
 	State *ec2.InstanceState `json:"state"`
 	IP    *string            `json:"ip,omitempty"`
-	Error error              `json:"error,omitempty"`
+	Error string             `json:"error,omitempty"`
 }
 
-func HandleRequest() (StatusResponse, error) {
+func HandleRequest() (util.LambdaApiResponse, error) {
 	result, err := svc.DescribeInstances(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
@@ -62,22 +55,17 @@ func HandleRequest() (StatusResponse, error) {
 			fmt.Println(err.Error())
 		}
 		response.Code = 500
-		state.Error = err
-		return stringifyJson(response, state), err
+		state.Error = err.Error()
+		return util.StringifyBody(response, state), nil
 	}
 	if len(result.Reservations) == 0 || len(result.Reservations[0].Instances) == 0 {
 		response.Code = 404
-		return stringifyJson(response, state), fmt.Errorf("No instances found for your request - please contact the administrator")
+		state.Error = "No instances found for your request - please contact the administrator"
+		return util.StringifyBody(response, state), nil
 	}
 	state.IP = result.Reservations[0].Instances[0].PublicIpAddress
 	state.State = result.Reservations[0].Instances[0].State
-	return stringifyJson(response, state), nil
-}
-
-func stringifyJson(response *StatusResponse, state State) StatusResponse {
-	b, _ := json.Marshal(state)
-	response.Body = string(b)
-	return *response
+	return util.StringifyBody(response, state), nil
 }
 
 func main() {
