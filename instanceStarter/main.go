@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -57,23 +58,32 @@ type State struct {
 	Error  string `json:"error,omitempty"`
 }
 
-func HandleRequest(action InstanceAction) (util.LambdaApiResponse, error) {
+func HandleRequest(request util.LambdaApiRequest) (util.LambdaApiResponse, error) {
+	var bodyJson InstanceAction
 	var err error
-	if action.Action == actionStart {
+
+	err = json.Unmarshal([]byte(request.Body), &bodyJson)
+	if err != nil {
+		response.Code = 500
+		state.Error = err.Error()
+		return util.StringifyBody(response, *state), nil
+	}
+
+	if bodyJson.Action == actionStart {
 		fmt.Println("Starting instance...")
 		err = startInstance()
-	} else if action.Action == actionStop {
+	} else if bodyJson.Action == actionStop {
 		err = stopInstance()
 		fmt.Println("Stopping instance...")
 	} else {
-		fmt.Println("Action type not recognized:", action.Action)
-		err = fmt.Errorf("Action type not recognized: %s", action.Action)
+		fmt.Println("Action type not recognized:", bodyJson.Action)
+		err = fmt.Errorf("Action type not recognized: %s", bodyJson.Action)
 	}
 	if err != nil {
 		response.Code = 500
 		state.Error = err.Error()
 	}
-	state.Action = action.Action
+	state.Action = bodyJson.Action
 	return util.StringifyBody(response, *state), nil
 }
 
